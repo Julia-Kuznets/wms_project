@@ -6,7 +6,7 @@ from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ВСТАВЬ СЮДА СВОЙ ТОКЕН ОТ BOTFATHER
-BOT_TOKEN = "8430082338:AAFHcc9nUynuPrBOdmuseoTFR1CDCCvOceY"
+BOT_TOKEN = ""
 
 # URL нашего локального Django API
 API_URL = "http://127.0.0.1:8000/api/v1/tasks"
