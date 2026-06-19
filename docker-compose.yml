@@ -1,0 +1,91 @@
+
+services:
+  # 1. База данных PostgreSQL
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: vending_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secure_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  # 2. Брокер сообщений Redis
+  redis:
+    image: redis:alpine
+    restart: always
+    ports:
+      - "6379:6379"
+
+  # 3. Наш веб-сервер (Django + Gunicorn)
+  web:
+    build: .
+    restart: always
+    command: sh -c "python manage.py migrate && gunicorn core.wsgi:application --bind 0.0.0.0:8000"
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=db
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+
+  # 4. Фоновый планировщик (Celery Beat) - Эмулятор продаж
+# 4. Фоновый планировщик (Celery Beat)
+  celery_beat:
+    build: .
+    command: celery -A core beat -l info
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=db
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0   # <-- Добавили это
+    depends_on:
+      - web
+      - redis
+
+  # 5. Фоновый исполнитель (Celery Worker)
+  celery_worker:
+    build: .
+    command: celery -A core worker -l info
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=db
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0   # <-- Добавили это
+    depends_on:
+      - web
+      - redis
+
+  # 6. Telegram-бот
+  bot:
+    build: .
+    restart: always
+    command: python bot.py
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - API_URL=http://web:8000/api/v1/tasks
+      - DB_HOST=db 
+    depends_on:
+      - web
+
+volumes:
+  postgres_data:

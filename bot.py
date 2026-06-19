@@ -4,12 +4,20 @@ import aiohttp
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+import os
+from dotenv import load_dotenv
+
+
+load_dotenv()
 
 # ВСТАВЬ СЮДА СВОЙ ТОКЕН ОТ BOTFATHER
-BOT_TOKEN = ""
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN не найден в переменных окружения или .env файле!")
 
-# URL нашего локального Django API
-API_URL = "http://127.0.0.1:8000/api/v1/tasks"
+
+# Читаем из окружения. В Docker это будет http://web:8000/..., а локально 127.0.0.1
+API_URL = os.environ.get("API_URL", "http://127.0.0.1:8000/api/v1/tasks")
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
