@@ -7,19 +7,25 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import os
 from dotenv import load_dotenv
 
+# ДОБАВЛЯЕМ СЕТЕВЫЕ МОДУЛИ AIOGRAM ДЛЯ ПОДДЕРЖКИ ПРОКСИ
+from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.client.telegram import TelegramAPIServer
 
 load_dotenv()
 
-# ВСТАВЬ СЮДА СВОЙ ТОКЕН ОТ BOTFATHER
+# Читаем токен бота из .env
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не найден в переменных окружения или .env файле!")
 
-
-# Читаем из окружения. В Docker это будет http://web:8000/..., а локально 127.0.0.1
+# Читаем адрес Django API из окружения
 API_URL = os.environ.get("API_URL", "http://127.0.0.1:8000/api/v1/tasks")
 
-bot = Bot(token=BOT_TOKEN)
+# ИНИЦИАЛИЗИРУЕМ БОТА ЧЕРЕЗ БЕСПЛАТНЫЙ РЕВЕРС-ПРОКСИ СЕРВЕР ДЛЯ TELEGRAM
+session = AiohttpSession(
+    api=TelegramAPIServer.from_base('https://telegram-proxy.org')
+)
+bot = Bot(token=BOT_TOKEN, session=session)
 dp = Dispatcher()
 
 # 1. Приветствие
@@ -30,14 +36,12 @@ async def cmd_start(message: types.Message):
         f"Твой Telegram ID: {message.from_user.id}. Ожидай поступления новых заявок."
     )
 
-# 2. Эмуляция прихода заявки (Специальная команда для тестирования и скриншотов)
 # 2. Получение списка РЕАЛЬНЫХ новых заявок из базы Django
 @dp.message(Command("tasks"))
 async def cmd_show_tasks(message: types.Message):
     # Для запросов к нашему локальному Django прокси не нужен, 
     # поэтому создаем чистую сессию
     async with aiohttp.ClientSession() as session:
-        # API_URL у нас = "http://127.0.0.1:8000/api/v1/tasks" (мы добавили этот путь)
         url = f"{API_URL}/" 
         
         try:
@@ -79,7 +83,6 @@ async def cmd_show_tasks(message: types.Message):
 # 3. Тот самый обработчик кнопки (Логика из Листинга 3.3)
 @dp.callback_query(F.data.startswith("take_"))
 async def take_task_callback(callback_query: types.CallbackQuery):
-    # Вытаскиваем ID заявки из callback_data (например, take_1 -> 1)
     task_id = callback_query.data.split('_')[1]
     user_id = callback_query.from_user.id
     
@@ -112,13 +115,13 @@ async def take_task_callback(callback_query: types.CallbackQuery):
                     await callback_query.message.edit_text("⚠️ Ошибка сервера.")
         except Exception as e:
             await callback_query.answer(f"Ошибка соединения с сервером API: {e}", show_alert=True)
-# 4. Обработчик кнопки ЗАВЕРШЕНИЯ РАБОТЫ
+
 # 4. Обработчик кнопки ЗАВЕРШЕНИЯ РАБОТЫ
 @dp.callback_query(F.data.startswith("done_"))
 async def done_task_callback(callback_query: types.CallbackQuery):
     task_id = callback_query.data.split('_')[1]
     
-    # ЧИСТАЯ СЕССИЯ БЕЗ ВСЯКИХ КОННЕКТОРОВ И ПРОКСИ
+    # ЧИСТАЯ СЕССИЯ БЕЗ ВСЯКИХ КОННЕКТОРОВ И ПРОКСИ ДЛЯ ЛОКАЛЬНОГО API
     async with aiohttp.ClientSession() as session: 
         url = f"{API_URL}/{task_id}/complete/"
         
