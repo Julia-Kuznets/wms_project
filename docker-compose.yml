@@ -24,7 +24,7 @@ services:
   web:
     build: .
     restart: always
-    command: sh -c "python manage.py migrate && gunicorn core.wsgi:application --bind 0.0.0.0:8000"
+    command: sh -c "python manage.py migrate && python manage.py collectstatic --noinput && gunicorn core.wsgi:application --bind 0.0.0.0:8000"
     volumes:
       - .:/app
     ports:
@@ -39,7 +39,7 @@ services:
       - db
       - redis
 
-  # 4. Фоновый планировщик (Celery Beat) - Эмулятор продаж
+
 # 4. Фоновый планировщик (Celery Beat)
   celery_beat:
     build: .

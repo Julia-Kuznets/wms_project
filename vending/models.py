@@ -64,6 +64,7 @@ class ServiceTask(models.Model):
     machine = models.ForeignKey(Machine, on_delete=models.CASCADE)
     technician = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, verbose_name="Техник")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='NEW', verbose_name="Статус")
+    description = models.TextField(verbose_name="Описание проблемы/Код ошибки", default="Неизвестная ошибка")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создана")
 
     def __str__(self):
