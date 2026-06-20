@@ -86,6 +86,9 @@ services:
       - DB_HOST=db 
     depends_on:
       - web
+    dns:
+      - 77.88.8.8  # Публичный DNS Яндекса
+      - 8.8.8.8    # Публичный DNS Google
 
 volumes:
   postgres_data:
