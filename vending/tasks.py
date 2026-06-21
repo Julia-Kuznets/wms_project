@@ -1,5 +1,6 @@
 import os
 import random
+import redis as _redis
 import requests
 from celery import shared_task
 from django.contrib.auth import get_user_model
@@ -7,6 +8,53 @@ from .models import MachineSlot, ServiceTask
 
 User = get_user_model()
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
+VK_TOKEN = os.environ.get("VK_TOKEN")
+REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+
+try:
+    _redis_client = _redis.from_url(REDIS_URL, decode_responses=True)
+    _redis_client.ping()
+except Exception:
+    _redis_client = None
+
+VK_SUBSCRIBERS_KEY = "vk_bot:subscribers"
+VK_API_VERSION = "5.199"
+
+
+def broadcast_vk_message(task_id, machine_id, description):
+    if not VK_TOKEN or not _redis_client:
+        return
+
+    subscriber_ids = list(_redis_client.smembers(VK_SUBSCRIBERS_KEY))
+    if not subscriber_ids:
+        return
+
+    text = (
+        f"⚠ АВТОМАТИЧЕСКАЯ ЗАЯВКА #{task_id}\n\n"
+        f"Автомат: ID {machine_id}\n"
+        f"Проблема: {description}\n\n"
+        f"Зайди в меню /tasks, чтобы взять в работу!"
+    )
+
+    for uid in subscriber_ids:
+        url = "https://api.vk.com/method/messages.send"
+        params = {
+            "access_token": VK_TOKEN,
+            "v": VK_API_VERSION,
+            "user_id": uid,
+            "message": text,
+            "random_id": 0,
+        }
+        try:
+            resp = requests.get(url, params=params, timeout=5)
+            data = resp.json()
+            if "error" in data:
+                code = data["error"].get("error_code")
+                if code == 901:
+                    _redis_client.srem(VK_SUBSCRIBERS_KEY, uid)
+        except Exception as e:
+            print(f"Ошибка отправки VK-уведомления пользователю {uid}: {e}")
+
 
 def broadcast_telegram_message(task_id, machine_id, description):
     """
@@ -83,3 +131,4 @@ def emulate_sales_and_check_stock():
                     
                     # 4. Рассылка Push-уведомлений
                     broadcast_telegram_message(new_task.id, slot.machine.id, desc)
+                    broadcast_vk_message(new_task.id, slot.machine.id, desc)

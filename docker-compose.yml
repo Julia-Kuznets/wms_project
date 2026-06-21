@@ -84,6 +84,7 @@ services:
     environment:
       - API_URL=http://web:8000/api/v1/tasks
       - DB_HOST=db
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       - web
     dns:

@@ -2,24 +2,13 @@ import json
 import logging
 import aiohttp
 import os
+import redis as _redis
 from dotenv import load_dotenv
 
 from vkbottle import Bot, Keyboard, Callback, KeyboardButtonColor, EMPTY_KEYBOARD
-from vkbottle.dispatch.rules.base import CommandRule, ABCRule
+from vkbottle.dispatch.rules.base import CommandRule
 
-
-class _DedupRule(ABCRule):
-    def __init__(self):
-        self._seen = set()
-
-    async def check(self, event, **context) -> bool:
-        msg_id = event.id
-        if msg_id in self._seen:
-            return False
-        self._seen.add(msg_id)
-        if len(self._seen) > 500:
-            self._seen.clear()
-        return True
+_seen_msg_ids: set = set()
 
 load_dotenv()
 
@@ -28,10 +17,17 @@ if not VK_TOKEN:
     raise ValueError("VK_TOKEN не найден в переменных окружения или .env файле!")
 
 API_URL = os.environ.get("API_URL", "http://127.0.0.1:8000/api/v1/tasks")
+REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+
+try:
+    _redis_client = _redis.from_url(REDIS_URL, decode_responses=True)
+    _redis_client.ping()
+except Exception:
+    _redis_client = None
+
+VK_SUBSCRIBERS_KEY = "vk_bot:subscribers"
 
 bot = Bot(token=VK_TOKEN)
-
-bot.on.auto_rules.append(_DedupRule())
 
 
 async def show_snackbar(event: dict, text: str):
@@ -49,6 +45,9 @@ async def cmd_start(message):
     user_info = await bot.api.users.get(user_ids=[message.from_id])
     first_name = user_info[0].first_name if user_info else "пользователь"
 
+    if _redis_client:
+        _redis_client.sadd(VK_SUBSCRIBERS_KEY, str(message.from_id))
+
     await message.answer(
         f"Привет, {first_name}! Я бот диспетчерской службы ООО «Премакса».\n"
         f"Твой VK ID: {message.from_id}. Ожидай поступления новых заявок."
@@ -57,6 +56,13 @@ async def cmd_start(message):
 
 @bot.on.message(CommandRule("tasks"))
 async def cmd_show_tasks(message):
+    msg_id = message.id
+    if msg_id in _seen_msg_ids:
+        return
+    _seen_msg_ids.add(msg_id)
+    if len(_seen_msg_ids) > 1000:
+        _seen_msg_ids.clear()
+
     async with aiohttp.ClientSession() as session:
         url = f"{API_URL}/"
 
