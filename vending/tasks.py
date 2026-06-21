@@ -7,39 +7,55 @@ from .models import MachineSlot, ServiceTask
 
 User = get_user_model()
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
+VK_TOKEN = os.environ.get("VK_TOKEN") # <-- Добавили токен ВК
 
-def broadcast_telegram_message(task_id, machine_id, description):
-    """
-    Отправляет push-уведомление всем техникам (Broadcasting).
-    Для MVP мы рассылаем сообщение всем пользователям, 
-    чьи имена (username) состоят только из цифр (это Telegram ID).
-    """
-    if not BOT_TOKEN:
-        return
+def broadcast_message_to_all(task_id, machine_id, description):
+    """Широковещательная рассылка в Telegram и ВКонтакте"""
+    
+    # === 1. РАССЫЛКА В TELEGRAM ===
+    if BOT_TOKEN:
+        tg_users = User.objects.filter(username__iregex=r'^\d+$')
+        tg_text = (
+            f"🚨 <b>АВТОМАТИЧЕСКАЯ ЗАЯВКА #{task_id}</b>\n\n"
+            f"<b>Автомат:</b> ID {machine_id}\n"
+            f"<b>Проблема:</b> {description}\n\n"
+            f"<i>Зайди в меню /tasks, чтобы взять в работу!</i>"
+        )
+        for tech in tg_users:
+            url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+            payload = {"chat_id": tech.username, "text": tg_text, "parse_mode": "HTML"}
+            try:
+                requests.post(url, json=payload, timeout=5)
+            except Exception as e:
+                print(f"Ошибка отправки в TG: {e}")
 
-    # Ищем техников (тех, кто хоть раз нажимал кнопку в боте и создался в БД)
-    technicians = User.objects.filter(username__iregex=r'^\d+$')
-    
-    text = (
-        f"🚨 <b>АВТОМАТИЧЕСКАЯ ЗАЯВКА #{task_id}</b>\n\n"
-        f"<b>Автомат:</b> ID {machine_id}\n"
-        f"<b>Проблема:</b> {description}\n\n"
-        f"<i>Зайди в меню /tasks, чтобы взять в работу!</i>"
-    )
-    
-    for tech in technicians:
-        chat_id = tech.username
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        payload = {
-            "chat_id": chat_id,
-            "text": text,
-            "parse_mode": "HTML"
-        }
-        try:
-            # Делаем синхронный POST-запрос к API Телеграма
-            requests.post(url, json=payload, timeout=5)
-        except Exception as e:
-            print(f"Ошибка отправки Push-уведомления: {e}")
+    # === 2. РАССЫЛКА В ВКОНТАКТЕ ===
+    if VK_TOKEN:
+        # Ищем техников ВК (их имена в БД начинаются с vk_)
+        vk_users = User.objects.filter(username__startswith='vk_')
+        vk_text = (
+            f"🚨 АВТОМАТИЧЕСКАЯ ЗАЯВКА #{task_id}\n\n"
+            f"Автомат: ID {machine_id}\n"
+            f"Проблема: {description}\n\n"
+            f"Напиши команду /tasks, чтобы принять её в работу!"
+        )
+        for tech in vk_users:
+            # Вытаскиваем чистый числовой ID из "vk_123456"
+            vk_id = tech.username.replace('vk_', '')
+            url = "https://api.vk.com/method/messages.send"
+            payload = {
+                "user_id": vk_id,
+                "message": vk_text,
+                "random_id": random.randint(1, 1000000),
+                "access_token": VK_TOKEN,
+                "v": "5.131"
+            }
+            try:
+                requests.post(url, data=payload, timeout=5)
+            except Exception as e:
+                print(f"Ошибка отправки в ВК: {e}")
+
+
 
 @shared_task
 def emulate_sales_and_check_stock():
@@ -82,4 +98,4 @@ def emulate_sales_and_check_stock():
                     print(f"Создана автоматическая заявка #{new_task.id} для автомата {slot.machine.id}")
                     
                     # 4. Рассылка Push-уведомлений
-                    broadcast_telegram_message(new_task.id, slot.machine.id, desc)
+                    broadcast_message_to_all(new_task.id, slot.machine.id, desc)

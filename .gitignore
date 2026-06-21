@@ -1,11 +1,14 @@
 .venv/
 venv/
 ENV/
+.env
 
 **/__pycache__/
 *.pyc
 
 staticfiles/
 
+.vkbottle/
 
 db.sqlite3
+celerybeat-schedule
