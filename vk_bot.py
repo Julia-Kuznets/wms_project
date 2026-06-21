@@ -2,7 +2,7 @@ import os
 import asyncio
 import aiohttp
 from vkbottle.bot import Bot, Message, MessageEvent
-from vkbottle import Keyboard, Callback, GroupTypes
+from vkbottle import Keyboard, Callback
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -64,7 +64,7 @@ async def show_tasks_handler(message: Message):
             await message.answer(f"Ошибка соединения с API: {e}")
 
 # 3. Обработка кликов по кнопкам (Callback-события в ВК)
-@bot.on.raw_event(GroupTypes.MESSAGE_EVENT, dataclass=MessageEvent)
+@bot.on.raw_event("message_event", dataclass=MessageEvent)
 async def handle_callback(event: MessageEvent):
     payload = event.payload
     task_id = payload.get("task_id")
