@@ -5,7 +5,21 @@ import os
 from dotenv import load_dotenv
 
 from vkbottle import Bot, Keyboard, Callback, KeyboardButtonColor, EMPTY_KEYBOARD
-from vkbottle.dispatch.rules.base import CommandRule
+from vkbottle.dispatch.rules.base import CommandRule, ABCRule
+
+
+class _DedupRule(ABCRule):
+    def __init__(self):
+        self._seen = set()
+
+    async def check(self, event, **context) -> bool:
+        msg_id = event.id
+        if msg_id in self._seen:
+            return False
+        self._seen.add(msg_id)
+        if len(self._seen) > 500:
+            self._seen.clear()
+        return True
 
 load_dotenv()
 
@@ -16,6 +30,8 @@ if not VK_TOKEN:
 API_URL = os.environ.get("API_URL", "http://127.0.0.1:8000/api/v1/tasks")
 
 bot = Bot(token=VK_TOKEN)
+
+bot.on.auto_rules.append(_DedupRule())
 
 
 async def show_snackbar(event: dict, text: str):
