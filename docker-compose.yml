@@ -72,23 +72,23 @@ services:
       - web
       - redis
 
-  # 6. Telegram-бот
-  bot:
+  # 6. VK-бот
+  vk_bot:
     build: .
     restart: always
-    command: python bot.py
+    command: python vk_bot.py
     volumes:
       - .:/app
     env_file:
       - .env
     environment:
       - API_URL=http://web:8000/api/v1/tasks
-      - DB_HOST=db 
+      - DB_HOST=db
     depends_on:
       - web
     dns:
-      - 77.88.8.8  # Публичный DNS Яндекса
-      - 8.8.8.8    # Публичный DNS Google
+      - 77.88.8.8
+      - 8.8.8.8
 
 volumes:
   postgres_data:
